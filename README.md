@@ -5,8 +5,8 @@
 [영문도메인명][영문구체적인기능명]
 
 #### 예시
-- [review][create-review]
-- [payment][refund-request]
+- [user][login]
+- [goal][create]
 
 ### 🎯 목표
 - 사용자가 **{어떤 행동}**을 했을 때 **{어떤 결과}**를 얻는다.
@@ -25,12 +25,10 @@
 ## 🌿 Branch Convention
 
 ### 📌 기본 규칙
-type/이슈키-영문기능명
+type/영문도메인명/영문기능명
 
-- 소문자 + 하이픈(`-`) 사용
 - 한 브랜치 = 한 이슈
-- 반드시 **Linear 이슈 키 포함**
-- 
+
 ### 🔖 Branch Types
 - `feat` : 새로운 기능 개발
 - `fix` : 버그 수정
@@ -41,11 +39,8 @@ type/이슈키-영문기능명
 - `chore` : 설정 / 기타
 
 ### ✅ Branch Examples
-- feat/PROJ-123-create-review
-- fix/PROJ-145-null-pointer
-- refactor/PROJ-201-payment-validation
-- docs/PROJ-301-commit-guide
-- design/PROJ-410-calendar-style
+- feat/user/login
+- fix/cashflow/validation-bug
 
 ---
 
@@ -71,12 +66,10 @@ type(scope): subject
 - user
 - cashflow
 - transaction
-- review
-- payment
+- goal
 
 ### ✍ Subject
 - 변경 내용을 **간결하고 명확하게** 작성
-- 동사로 시작 권장
 - 마침표 사용 ❌
 
 ### ✅ Commit Examples
