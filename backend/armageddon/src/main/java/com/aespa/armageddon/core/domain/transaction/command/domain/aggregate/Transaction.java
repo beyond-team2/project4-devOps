@@ -40,4 +40,22 @@ public class Transaction {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Category category;
+
+    public Transaction(
+            Long userNo,
+            String title,
+            String memo,
+            int amount,
+            LocalDate date,
+            TransactionType type,
+            Category category
+    ) {
+        this.userNo = userNo;
+        this.title = title;
+        this.memo = memo;
+        this.amount = amount;
+        this.date = date;
+        this.type = type;
+        this.category = category;
+    }
 }
