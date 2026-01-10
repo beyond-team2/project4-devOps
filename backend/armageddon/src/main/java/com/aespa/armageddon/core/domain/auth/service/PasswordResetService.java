@@ -37,24 +37,20 @@ public class PasswordResetService {
     @Transactional
     public void requestReset(PasswordResetRequest req) {
         if (req == null) {
-            return;
+            throw new CoreException(ErrorType.INVALID_INPUT_VALUE);
         }
 
         String loginId = trimToNull(req.getLoginId());
         String email = trimToNull(req.getEmail());
         if (loginId == null || email == null) {
-            return;
+            throw new CoreException(ErrorType.INVALID_INPUT_VALUE);
         }
 
-        Optional<User> optUser = userRepository.findByLoginId(loginId);
-        if (optUser.isEmpty()) {
-            return;
-        }
-
-        User user = optUser.get();
+        User user = userRepository.findByLoginId(loginId)
+                .orElseThrow(() -> new CoreException(ErrorType.USER_NOT_FOUND));
         String savedEmail = trimToNull(user.getEmail());
         if (savedEmail == null || !savedEmail.equalsIgnoreCase(email)) {
-            return;
+            throw new CoreException(ErrorType.INVALID_INPUT_VALUE);
         }
 
         String code = generate6DigitCode();
@@ -95,6 +91,10 @@ public class PasswordResetService {
         String inputHash = sha256(code);
         if (!token.getCodeHash().equals(inputHash)) {
             throw new CoreException(ErrorType.INVALID_PASSWORD_RESET_CODE);
+        }
+
+        if (passwordEncoder.matches(newPassword, user.getPassword())) {
+            throw new CoreException(ErrorType.SAME_AS_OLD_PASSWORD);
         }
 
         user.updatePassword(passwordEncoder.encode(newPassword));

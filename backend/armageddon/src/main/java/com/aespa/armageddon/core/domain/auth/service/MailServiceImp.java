@@ -58,4 +58,14 @@ public class MailServiceImp implements MailService {
 
         sendHtmlMail(to, subject, "mail/ResetPassword", vars);
     }
+
+    @Override
+    public void sendEmailVerificationCode(String to, String code) {
+        String subject = "[armageddon] Email verification code";
+
+        Map<String, Object> vars = new HashMap<>();
+        vars.put("code", code);
+
+        sendHtmlMail(to, subject, "mail/VerifyEmail", vars);
+    }
 }

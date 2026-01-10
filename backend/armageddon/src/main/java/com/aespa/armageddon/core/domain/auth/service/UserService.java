@@ -4,6 +4,8 @@ import com.aespa.armageddon.core.api.auth.dto.request.SignupRequest;
 import com.aespa.armageddon.core.common.support.error.CoreException;
 import com.aespa.armageddon.core.common.support.error.ErrorType;
 import com.aespa.armageddon.core.domain.auth.entity.User;
+import com.aespa.armageddon.core.domain.auth.repository.PasswordResetTokenRepository;
+import com.aespa.armageddon.core.domain.auth.repository.RefreshTokenRepository;
 import com.aespa.armageddon.core.domain.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -17,6 +19,9 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final EmailVerificationService emailVerificationService;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
 
     @Transactional
     public Long signup(SignupRequest request) {
@@ -27,6 +32,8 @@ public class UserService {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new CoreException(ErrorType.DUPLICATE_EMAIL);
         }
+
+        emailVerificationService.assertVerifiedAndConsume(request.getEmail());
 
         String encodedPassword = passwordEncoder.encode(request.getPassword());
 
@@ -39,5 +46,74 @@ public class UserService {
 
         User savedUser = userRepository.save(user);
         return savedUser.getId();
+    }
+
+    @Transactional
+    public User updateProfile(String currentLoginId, String newLoginId, String newEmail, String newNickname) {
+        if (currentLoginId == null) {
+            throw new CoreException(ErrorType.INVALID_INPUT_VALUE);
+        }
+
+        User user = userRepository.findByLoginId(currentLoginId)
+                .orElseThrow(() -> new CoreException(ErrorType.USER_NOT_FOUND));
+
+        String trimmedLoginId = trimToNull(newLoginId);
+        String trimmedEmail = trimToNull(newEmail);
+        String trimmedNickname = trimToNull(newNickname);
+
+        if (trimmedLoginId == null && trimmedEmail == null && trimmedNickname == null) {
+            throw new CoreException(ErrorType.INVALID_INPUT_VALUE);
+        }
+
+        boolean loginIdChanged = false;
+
+        if (trimmedLoginId != null && !trimmedLoginId.equals(user.getLoginId())) {
+            if (userRepository.existsByLoginId(trimmedLoginId)) {
+                throw new CoreException(ErrorType.DUPLICATE_LOGIN_ID);
+            }
+            user.updateLoginId(trimmedLoginId);
+            loginIdChanged = true;
+        }
+
+        if (trimmedEmail != null && !trimmedEmail.equalsIgnoreCase(user.getEmail())) {
+            if (userRepository.existsByEmail(trimmedEmail)) {
+                throw new CoreException(ErrorType.DUPLICATE_EMAIL);
+            }
+            emailVerificationService.assertVerifiedAndConsume(trimmedEmail);
+            user.updateEmail(trimmedEmail);
+        }
+
+        if (trimmedNickname != null && !trimmedNickname.equals(user.getNickname())) {
+            user.updateNickname(trimmedNickname);
+        }
+
+        if (loginIdChanged) {
+            refreshTokenRepository.deleteByLoginId(currentLoginId);
+        }
+
+        return user;
+    }
+
+    @Transactional
+    public void deleteAccount(String currentLoginId) {
+        if (currentLoginId == null) {
+            throw new CoreException(ErrorType.INVALID_INPUT_VALUE);
+        }
+
+        User user = userRepository.findByLoginId(currentLoginId)
+                .orElseThrow(() -> new CoreException(ErrorType.USER_NOT_FOUND));
+
+        refreshTokenRepository.deleteByLoginId(user.getLoginId());
+        passwordResetTokenRepository.deleteByUserId(user.getId());
+        emailVerificationService.deleteByEmail(user.getEmail());
+        userRepository.delete(user);
+    }
+
+    private String trimToNull(String s) {
+        if (s == null) {
+            return null;
+        }
+        String t = s.trim();
+        return t.isEmpty() ? null : t;
     }
 }

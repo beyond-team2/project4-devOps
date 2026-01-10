@@ -15,19 +15,20 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "tbl_password_reset_token",
+@Table(name = "email_verification_token",
         indexes = {
-                @Index(name = "idx_prt_user_created", columnList = "userId, createdAt")
+                @Index(name = "idx_evt_email_created", columnList = "email, createdAt")
         })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class PasswordResetToken {
+public class EmailVerificationToken {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private Long userId;
+    @Column(nullable = false, length = 100)
+    private String email;
 
     @Column(nullable = false, length = 64)
     private String codeHash;
@@ -35,14 +36,16 @@ public class PasswordResetToken {
     @Column(nullable = false)
     private LocalDateTime expiresAt;
 
+    private LocalDateTime verifiedAt;
+
     private LocalDateTime usedAt;
 
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
-    public static PasswordResetToken create(Long userId, String codeHash, Duration ttl) {
-        PasswordResetToken token = new PasswordResetToken();
-        token.userId = userId;
+    public static EmailVerificationToken create(String email, String codeHash, Duration ttl) {
+        EmailVerificationToken token = new EmailVerificationToken();
+        token.email = email;
         token.codeHash = codeHash;
         token.createdAt = LocalDateTime.now();
         token.expiresAt = token.createdAt.plus(ttl);
@@ -53,8 +56,16 @@ public class PasswordResetToken {
         return LocalDateTime.now().isAfter(expiresAt);
     }
 
+    public boolean isVerified() {
+        return verifiedAt != null;
+    }
+
     public boolean isUsed() {
         return usedAt != null;
+    }
+
+    public void markVerified() {
+        this.verifiedAt = LocalDateTime.now();
     }
 
     public void markUsed() {

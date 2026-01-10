@@ -43,8 +43,12 @@ public class SecurityConfig {
                                 .accessDeniedHandler(restAccessDeniedHandler)
                 )
                 .authorizeHttpRequests(auth ->
-                        auth.requestMatchers(HttpMethod.POST, "/api/auth/signup", "/api/auth/login", "/api/auth/refresh", "/api/auth/password/reset/**").permitAll()
+                        auth.requestMatchers(HttpMethod.POST, "/api/auth/signup", "/api/auth/login", "/api/auth/refresh",
+                                        "/api/auth/password/reset/**", "/api/auth/email/verify/**").permitAll()
                                 .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
+                                .requestMatchers(HttpMethod.PUT, "/api/users/update").authenticated()
+                                .requestMatchers(HttpMethod.DELETE, "/api/users/delete").authenticated()
+                                .requestMatchers(HttpMethod.POST, "/transaction/write").authenticated()
                                 .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
