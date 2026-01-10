@@ -5,10 +5,7 @@ import com.aespa.armageddon.core.api.auth.dto.request.PasswordResetConfirmReques
 import com.aespa.armageddon.core.api.auth.dto.request.PasswordResetRequest;
 import com.aespa.armageddon.core.common.support.error.CoreException;
 import com.aespa.armageddon.core.common.support.error.ErrorType;
-import com.aespa.armageddon.core.domain.auth.entity.PasswordResetToken;
 import com.aespa.armageddon.core.domain.auth.entity.User;
-import com.aespa.armageddon.core.domain.auth.repository.PasswordResetTokenRepository;
-import com.aespa.armageddon.core.domain.auth.repository.RefreshTokenRepository;
 import com.aespa.armageddon.core.domain.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -19,7 +16,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
-import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 
 @Service
@@ -27,10 +23,9 @@ import java.util.concurrent.ThreadLocalRandom;
 public class PasswordResetService {
 
     private final UserRepository userRepository;
-    private final PasswordResetTokenRepository tokenRepository;
+    private final RedisTokenStore tokenStore;
     private final PasswordEncoder passwordEncoder;
     private final MailService mailService;
-    private final RefreshTokenRepository refreshTokenRepository;
 
     private static final Duration TTL = Duration.ofMinutes(10);
 
@@ -56,10 +51,7 @@ public class PasswordResetService {
         String code = generate6DigitCode();
         String codeHash = sha256(code);
 
-        PasswordResetToken token = PasswordResetToken.create(
-                user.getId(), codeHash, TTL
-        );
-        tokenRepository.save(token);
+        tokenStore.storePasswordResetCode(user.getId(), codeHash, TTL);
 
         mailService.sendPasswordResetCode(user.getEmail(), code);
     }
@@ -81,15 +73,13 @@ public class PasswordResetService {
         User user = userRepository.findByLoginId(loginId)
                 .orElseThrow(() -> new CoreException(ErrorType.INVALID_PASSWORD_RESET_CODE));
 
-        PasswordResetToken token = tokenRepository.findTopByUserIdOrderByCreatedAtDesc(user.getId())
-                .orElseThrow(() -> new CoreException(ErrorType.INVALID_PASSWORD_RESET_CODE));
-
-        if (token.isUsed() || token.isExpired()) {
+        String storedHash = tokenStore.getPasswordResetCode(user.getId());
+        if (storedHash == null) {
             throw new CoreException(ErrorType.INVALID_PASSWORD_RESET_CODE);
         }
 
         String inputHash = sha256(code);
-        if (!token.getCodeHash().equals(inputHash)) {
+        if (!storedHash.equals(inputHash)) {
             throw new CoreException(ErrorType.INVALID_PASSWORD_RESET_CODE);
         }
 
@@ -98,8 +88,8 @@ public class PasswordResetService {
         }
 
         user.updatePassword(passwordEncoder.encode(newPassword));
-        token.markUsed();
-        refreshTokenRepository.deleteByLoginId(user.getLoginId());
+        tokenStore.deletePasswordResetCode(user.getId());
+        tokenStore.deleteRefreshToken(user.getLoginId());
     }
 
     private String generate6DigitCode() {

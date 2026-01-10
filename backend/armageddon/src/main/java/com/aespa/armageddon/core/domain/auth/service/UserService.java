@@ -4,8 +4,6 @@ import com.aespa.armageddon.core.api.auth.dto.request.SignupRequest;
 import com.aespa.armageddon.core.common.support.error.CoreException;
 import com.aespa.armageddon.core.common.support.error.ErrorType;
 import com.aespa.armageddon.core.domain.auth.entity.User;
-import com.aespa.armageddon.core.domain.auth.repository.PasswordResetTokenRepository;
-import com.aespa.armageddon.core.domain.auth.repository.RefreshTokenRepository;
 import com.aespa.armageddon.core.domain.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -20,8 +18,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailVerificationService emailVerificationService;
-    private final RefreshTokenRepository refreshTokenRepository;
-    private final PasswordResetTokenRepository passwordResetTokenRepository;
+    private final RedisTokenStore tokenStore;
 
     @Transactional
     public Long signup(SignupRequest request) {
@@ -88,7 +85,7 @@ public class UserService {
         }
 
         if (loginIdChanged) {
-            refreshTokenRepository.deleteByLoginId(currentLoginId);
+            tokenStore.deleteRefreshToken(currentLoginId);
         }
 
         return user;
@@ -103,8 +100,8 @@ public class UserService {
         User user = userRepository.findByLoginId(currentLoginId)
                 .orElseThrow(() -> new CoreException(ErrorType.USER_NOT_FOUND));
 
-        refreshTokenRepository.deleteByLoginId(user.getLoginId());
-        passwordResetTokenRepository.deleteByUserId(user.getId());
+        tokenStore.deleteRefreshToken(user.getLoginId());
+        tokenStore.deletePasswordResetCode(user.getId());
         emailVerificationService.deleteByEmail(user.getEmail());
         userRepository.delete(user);
     }

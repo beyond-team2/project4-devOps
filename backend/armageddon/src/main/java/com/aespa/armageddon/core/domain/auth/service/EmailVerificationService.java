@@ -2,8 +2,6 @@ package com.aespa.armageddon.core.domain.auth.service;
 
 import com.aespa.armageddon.core.common.support.error.CoreException;
 import com.aespa.armageddon.core.common.support.error.ErrorType;
-import com.aespa.armageddon.core.domain.auth.entity.EmailVerificationToken;
-import com.aespa.armageddon.core.domain.auth.repository.EmailVerificationTokenRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +18,7 @@ public class EmailVerificationService {
 
     private static final Duration TTL = Duration.ofMinutes(10);
 
-    private final EmailVerificationTokenRepository tokenRepository;
+    private final RedisTokenStore tokenStore;
     private final MailService mailService;
 
     @Transactional
@@ -33,10 +31,7 @@ public class EmailVerificationService {
         String code = generate6DigitCode();
         String codeHash = sha256(code);
 
-        EmailVerificationToken token = EmailVerificationToken.create(
-                normalizedEmail, codeHash, TTL
-        );
-        tokenRepository.save(token);
+        tokenStore.storeEmailVerificationCode(normalizedEmail, codeHash, TTL);
 
         mailService.sendEmailVerificationCode(normalizedEmail, code);
     }
@@ -49,19 +44,18 @@ public class EmailVerificationService {
             throw new CoreException(ErrorType.INVALID_INPUT_VALUE);
         }
 
-        EmailVerificationToken token = tokenRepository.findTopByEmailOrderByCreatedAtDesc(normalizedEmail)
-                .orElseThrow(() -> new CoreException(ErrorType.INVALID_EMAIL_VERIFICATION_CODE));
-
-        if (token.isExpired() || token.isUsed()) {
+        String storedHash = tokenStore.getEmailVerificationCode(normalizedEmail);
+        if (storedHash == null) {
             throw new CoreException(ErrorType.INVALID_EMAIL_VERIFICATION_CODE);
         }
 
         String inputHash = sha256(normalizedCode);
-        if (!token.getCodeHash().equals(inputHash)) {
+        if (!storedHash.equals(inputHash)) {
             throw new CoreException(ErrorType.INVALID_EMAIL_VERIFICATION_CODE);
         }
 
-        token.markVerified();
+        tokenStore.deleteEmailVerificationCode(normalizedEmail);
+        tokenStore.storeEmailVerified(normalizedEmail, TTL);
     }
 
     @Transactional
@@ -71,21 +65,20 @@ public class EmailVerificationService {
             throw new CoreException(ErrorType.INVALID_INPUT_VALUE);
         }
 
-        EmailVerificationToken token = tokenRepository.findTopByEmailOrderByCreatedAtDesc(normalizedEmail)
-                .orElseThrow(() -> new CoreException(ErrorType.EMAIL_VERIFICATION_REQUIRED));
-
-        if (token.isExpired() || !token.isVerified() || token.isUsed()) {
+        if (!tokenStore.isEmailVerified(normalizedEmail)) {
             throw new CoreException(ErrorType.EMAIL_VERIFICATION_REQUIRED);
         }
 
-        token.markUsed();
+        tokenStore.deleteEmailVerified(normalizedEmail);
+        tokenStore.deleteEmailVerificationCode(normalizedEmail);
     }
 
     @Transactional
     public void deleteByEmail(String email) {
         String normalizedEmail = trimToNull(email);
         if (normalizedEmail != null) {
-            tokenRepository.deleteByEmail(normalizedEmail);
+            tokenStore.deleteEmailVerificationCode(normalizedEmail);
+            tokenStore.deleteEmailVerified(normalizedEmail);
         }
     }
 
